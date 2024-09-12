@@ -1,4 +1,5 @@
-from rest_framework.serializers import ModelSerializer
+
+from rest_framework.serializers import ModelSerializer, SlugRelatedField, DateTimeField
 from . import models
 
 
@@ -11,12 +12,24 @@ class CommentSerializer(ModelSerializer):
     class Meta:
         model = models.Comment
         fields = '__all__'
+        read_only = ['user', 'created_at']
 
 class SimpleBookSerializer(ModelSerializer):
-    category = CategorySerializer()
+    category = SlugRelatedField(
+        queryset=models.Category.objects.all(),
+        slug_field='name'
+    )
     class Meta:
         model = models.Book
-        fields = ('title', 'category', 'isbn', 'published_date')
+        fields = ('title', 'category', 'isbn', 'published_date', 'loan_period')
+    def update(self, instance, validated_data):
+        instance.title = validated_data.get('title', instance.title)
+        instance.category = validated_data.get('category', instance.category)
+        instance.isbn = validated_data.get('isbn', instance.isbn)
+        instance.published_date = validated_data.get('published_date', instance.published_date)
+        instance.loan_period = validated_data.get('loan_period', instance.loan_period)
+        instance.save()
+        return instance
 
 class AuthorSerializer(ModelSerializer):
     book = SimpleBookSerializer(many=True, read_only=True)
@@ -31,8 +44,22 @@ class SimpleAuthorSerializer(ModelSerializer):
 
 class BookSerializer(ModelSerializer):
     comments = CommentSerializer(many=True, read_only=True)
-    category = CategorySerializer()
     author = SimpleAuthorSerializer()
+    category = SlugRelatedField(
+        queryset=models.Category.objects.all(),
+        slug_field='name'
+    )
     class Meta:
         model = models.Book
-        fields = ('id', 'title', 'author', 'category', 'published_date', 'isbn','num_exist', 'comments')
+        fields = ('id', 'title', 'author', 'category', 'published_date', 'isbn','num_exist', 'comments', 'loan_period')
+
+class LendingTransaction(ModelSerializer):
+    returned_at = DateTimeField(format='%d/%m/%Y %H:%M', read_only=True)
+    class Meta:
+        model = models.LendingTransaction
+        fields = ['book', 'status']
+        read_only = ['borrower', 'borrowed_at', 'returned_at']
+class LendingTransactionUpdate(ModelSerializer):
+    class Meta:
+        model = models.LendingTransaction
+        fields = ['book','borrowed_at', 'returned_at', 'status']

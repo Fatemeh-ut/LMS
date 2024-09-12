@@ -9,6 +9,7 @@ class Users(AbstractUser):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='borrower')
+    max_borrowed_book = models.CharField(default=1)
     groups = models.ManyToManyField(Group, related_name='users_set', blank=True)
     user_permissions = models.ManyToManyField(Permission, related_name='users_permissions_set', blank=True)
 

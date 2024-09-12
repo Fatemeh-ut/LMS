@@ -1,17 +1,31 @@
+from datetime import timedelta
+
+from rest_framework.decorators import api_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import generics
+from rest_framework.pagination import PageNumberPagination
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from social_core.utils import user_is_active
+
+from accounts.models import Users
 from . import models
 from . import serializers
 from . import filters
 from . import script
 
+from accounts.permissions import IsAdminUser, IsBorrowerUser
 
+
+# just admin access this class
 class AuthorViewSet(ModelViewSet):
     queryset = models.Author.objects.all()
     serializer_class = serializers.AuthorSerializer
+    #permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
     search_fields =['first_name', 'last_name', 'nationality']
 
@@ -35,9 +49,12 @@ class AuthorViewSet(ModelViewSet):
             )
         return super().create(request, *args, **kwargs)
 
+ # admin and borrower access this
 class BookViewSet(ModelViewSet):
     queryset = models.Book.objects.all()
     serializer_class = serializers.BookSerializer
+    #permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
 
     filterset_class = filters.BookFilter
@@ -72,8 +89,71 @@ class BookViewSet(ModelViewSet):
                             )
         return super().create(request, *args, **kwargs)
 
+
+# just admin access this
 class CategoryViewSet(ModelViewSet):
     queryset = models.Category.objects.all()
     serializer_class = serializers.CategorySerializer
+    #permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
     search_fields = ['name']
+
+
+#just borrower access this
+class AddCommentView(generics.CreateAPIView):
+    queryset = models.Comment.objects.all()
+    serializer_class = serializers.CommentSerializer
+    # permission_classes = [IsBorrowerUser]
+
+    def perform_create(self, serializer):
+        book = models.Book.objects.get(pk=self.kwargs['pk'])
+        serializer.save(user=self.request.user, book=book)
+
+
+class AddLendingTransactionView(generics.CreateAPIView):
+    queryset = models.LendingTransaction.objects.all()
+    serializer_class = serializers.LendingTransaction
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        profile = Users.objects.get(user=user)
+
+        max_borrowed_book = profile.max_borrowed_book
+        current_borrowed_books = models.LendingTransaction.objects.filter(borrower=user, returned_at__isnull=True).count()
+
+        if current_borrowed_books >= max_borrowed_book:
+            return Response({'error':'You have reached the limit of borrowed books'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        book = models.Book.objects.get(pk=self.kwargs['pk'])
+        book.num_exist -= 1
+
+        borrowed_at = timezone.now()
+
+        loan_period_days = book.loan_period
+        returned_at = borrowed_at + timedelta(days=loan_period_days)
+
+        book.save()
+        serializer.save(borrower=self.request.user,borrowed_at=borrowed_at,returned_at=returned_at,book=book)
+
+class LendingTransactionUpdateView(generics.UpdateAPIView):
+    queryset = models.LendingTransaction.objects.all()
+    serializer_class = serializers.LendingTransactionUpdate
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+
+        if instance.status == 'borrowed' and instance.returned_at < timezone.now():
+            user = instance.borrower
+            user.is_active = False
+            user.save()
+            instance.returned_at = timezone.now()
+            instance.save()
+            return Response({'error': 'the return date has been passed, your account is now inactive '}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class  AddLoanPeriodBook(ModelViewSet):
+    queryset = models.Book.objects.filter(loan_period=0)
+    serializer_class = serializers.SimpleBookSerializer
+    pagination_class = PageNumberPagination

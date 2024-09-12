@@ -11,6 +11,8 @@ router.register('admin', views.AdminsViewSet)
 urlpatterns=[
     path('', include(router.urls)),
     path('login', views.UserLogin.as_view()),
-    path('borrower-profile/', views.BorrowerProfile.as_view())
+    path('register', views.UserRegisterView.as_view()),
+    path('borrower-profile/', views.BorrowerProfile.as_view()),
+    path('borrower-transaction/', views.BorrowerTransaction.as_view())
 
 ]

@@ -13,11 +13,12 @@ class CategoryAdmin(admin.ModelAdmin):
 
 class CommentAdmin(admin.StackedInline):
     model = Comment
-    fields = ('user', 'content', 'rating', 'created_at')
+    fields = ('user', 'content', 'rating')
+    readonly_fields = ('created_at',)
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    fields = ('title', 'author', 'category', 'published_date', 'isbn', 'num_exist')
+    fields = ('title', 'author', 'category', 'published_date', 'isbn', 'num_exist', 'loan_period')
     search_fields = ('title', 'author', 'category')
     inlines = [CommentAdmin]
 
