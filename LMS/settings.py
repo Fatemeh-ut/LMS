@@ -39,11 +39,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    'drf_spectacular',
     'djoser',
     'django_filters',
     'accounts',
     'library',
-    'api',
+
 ]
 
 MIDDLEWARE = [
@@ -133,14 +134,19 @@ AUTH_USER_MODEL='accounts.Users'
 
 REST_FRAMEWORK ={
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',  # Or LimitOffsetPagination
-    'PAGE_SIZE': 1,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.AcceptHeaderVersioning',
     'DEFAULT_VERSION':'v1',
     'ALLOWED_VERSION':['v1', 'v2'],
     'VERSION_PARAM': 'version'
+}
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Django drf',
 }
 
 SIMPLE_JWT = {

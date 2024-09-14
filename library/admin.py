@@ -25,5 +25,6 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(LendingTransaction)
 class LendingTransactionAdmin(admin.ModelAdmin):
-    fields = ('book', 'borrower', 'borrowed_at','returned_at','status',)
+    fields = ('book', 'borrower','returned_at','status',)
     search_fields = ('book', 'borrower')
+    readonly_fields = ('borrowed_at',)

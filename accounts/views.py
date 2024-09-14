@@ -1,17 +1,14 @@
 from datetime import datetime
-
-from django.utils.autoreload import is_django_module
+from django.contrib.auth import authenticate
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import generics
 from rest_framework.views import APIView
-from django.contrib.auth import authenticate
-from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.permissions import IsAuthenticated
+from drf_spectacular.utils import extend_schema
 from library.serializers import LendingTransactionUpdate
 from library.models import LendingTransaction
 from .models import Users
@@ -20,8 +17,9 @@ from .permissions import IsAdminUser, IsBorrowerUser
 
 
 class UserLogin(APIView):
+    serializer_class = serializers.UserLoginSerializer
     def post(self, request):
-        serializer = serializers.UserLoginSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user = authenticate(username=serializer.validated_data['username'],
                                 password=serializer.validated_data['password'])
@@ -37,8 +35,10 @@ class UserLogin(APIView):
 
 
 class UserRegisterView(APIView):
+    serializer_class = serializers.UserRegistrationSerializer
+
     def post(self, request, *args, **kwargs):
-        serializer = serializers.UserRegistrationSerializer(data=request.data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             return Response({'user': serializers.UserRegistrationSerializer(user).data},
@@ -58,6 +58,7 @@ class AdminTransaction(ModelViewSet):
 
 class BorrowerProfile(APIView):
     permission_classes = [IsAuthenticated]
+    @extend_schema(responses=serializers.BorrowerSerializer)
     def get(self, request, *args, **kwargs):
         user = request.user
         serializer = serializers.BorrowerSerializer(user)
@@ -73,7 +74,6 @@ class BorrowerTransaction(generics.ListAPIView):
 class BorrowerNotification(generics.ListAPIView):
     serializer_class = LendingTransactionUpdate
     permission_classes = [IsBorrowerUser]
-
     def get_queryset(self):
         return LendingTransaction.objects.filter(returned_at__lt = timezone.now(), status = 'borrowed')
     def list(self, request, *args, **kwargs):

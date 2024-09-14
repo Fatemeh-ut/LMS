@@ -1,6 +1,4 @@
 from datetime import timedelta
-
-from rest_framework.decorators import api_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,22 +8,23 @@ from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
-from social_core.utils import user_is_active
-
 from accounts.models import Users
+from accounts.permissions import IsAdminUser, IsBorrowerUser
 from . import models
 from . import serializers
 from . import filters
 from . import script
 
-from accounts.permissions import IsAdminUser, IsBorrowerUser
+class UsersPagination(PageNumberPagination):
+    page_size = 10
+    ordering = ['id']  # Default ordering
 
 
 # just admin access this class
 class AuthorViewSet(ModelViewSet):
     queryset = models.Author.objects.all()
     serializer_class = serializers.AuthorSerializer
-    #permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
     search_fields =['first_name', 'last_name', 'nationality']
 
@@ -53,8 +52,8 @@ class AuthorViewSet(ModelViewSet):
 class BookViewSet(ModelViewSet):
     queryset = models.Book.objects.all()
     serializer_class = serializers.BookSerializer
-    #permission_classes = [IsAuthenticated]
-    pagination_class = PageNumberPagination
+    permission_classes = [IsAuthenticated]
+    pagination_class = UsersPagination
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
 
     filterset_class = filters.BookFilter
@@ -94,7 +93,7 @@ class BookViewSet(ModelViewSet):
 class CategoryViewSet(ModelViewSet):
     queryset = models.Category.objects.all()
     serializer_class = serializers.CategorySerializer
-    #permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
     search_fields = ['name']
 
@@ -103,7 +102,7 @@ class CategoryViewSet(ModelViewSet):
 class AddCommentView(generics.CreateAPIView):
     queryset = models.Comment.objects.all()
     serializer_class = serializers.CommentSerializer
-    # permission_classes = [IsBorrowerUser]
+    permission_classes = [IsBorrowerUser]
 
     def perform_create(self, serializer):
         book = models.Book.objects.get(pk=self.kwargs['pk'])
@@ -113,10 +112,10 @@ class AddCommentView(generics.CreateAPIView):
 class AddLendingTransactionView(generics.CreateAPIView):
     queryset = models.LendingTransaction.objects.all()
     serializer_class = serializers.LendingTransaction
-
+    permission_classes = [IsBorrowerUser]
     def perform_create(self, serializer):
         user = self.request.user
-        profile = Users.objects.get(user=user)
+        profile = Users.objects.get(id=user.id)
 
         max_borrowed_book = profile.max_borrowed_book
         current_borrowed_books = models.LendingTransaction.objects.filter(borrower=user, returned_at__isnull=True).count()
@@ -150,10 +149,12 @@ class LendingTransactionUpdateView(generics.UpdateAPIView):
             instance.returned_at = timezone.now()
             instance.save()
             return Response({'error': 'the return date has been passed, your account is now inactive '}, status=status.HTTP_400_BAD_REQUEST)
-
+        instance.status = 'returned'
+        instance.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class  AddLoanPeriodBook(ModelViewSet):
     queryset = models.Book.objects.filter(loan_period=0)
     serializer_class = serializers.SimpleBookSerializer
-    pagination_class = PageNumberPagination
+    permission_classes = [IsAdminUser]
+    pagination_class = UsersPagination

@@ -11,8 +11,11 @@ class CategorySerializer(ModelSerializer):
 class CommentSerializer(ModelSerializer):
     class Meta:
         model = models.Comment
-        fields = '__all__'
-        read_only = ['user', 'created_at']
+        fields = ['content','rating']
+        extra_kwargs = {
+            'user': {'read_only': True},
+            'book': {'read_only': True}
+        }
 
 class SimpleBookSerializer(ModelSerializer):
     category = SlugRelatedField(
@@ -54,11 +57,15 @@ class BookSerializer(ModelSerializer):
         fields = ('id', 'title', 'author', 'category', 'published_date', 'isbn','num_exist', 'comments', 'loan_period')
 
 class LendingTransaction(ModelSerializer):
-    returned_at = DateTimeField(format='%d/%m/%Y %H:%M', read_only=True)
     class Meta:
         model = models.LendingTransaction
         fields = ['book', 'status']
         read_only = ['borrower', 'borrowed_at', 'returned_at']
+        extra_kwargs = {
+            'borrower': {'read_only': True},
+            'book': {'read_only': True}
+        }
+
 class LendingTransactionUpdate(ModelSerializer):
     class Meta:
         model = models.LendingTransaction
