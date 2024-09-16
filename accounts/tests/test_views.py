@@ -1,5 +1,4 @@
 from django.test import TestCase
-
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
@@ -8,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from accounts.models import Users
 from rest_framework.test import APIClient
 
-from library import models
+from library import models, serializers
 
 User = get_user_model()
 
@@ -112,7 +111,7 @@ class AdminViewTest(TestCase):
         )
         self.client.login(username='adminuser', password='adminpassword')
 
-        self.list_url = reverse('admin-list')  # مسیر ویو مورد نظر
+        self.list_url = reverse('admin-list')
         self.detail_url = reverse('admin-detail', kwargs={'pk':self.admin_user.pk})
 
         self.new_user_data = {
@@ -170,3 +169,154 @@ class AdminViewTest(TestCase):
         delete_url = reverse('admin-detail', kwargs={'pk': self.user.pk})
         response = self.client.delete(delete_url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class AdminTransactionTest(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin_user = User.objects.create_superuser(
+            username='adminuser',
+            password='adminpassword',
+            role='admin'
+        )
+        self.user = User.objects.create_user(
+            username='username',
+            password='userpassword',
+            role='borrower'
+        )
+        self.author = models.Author.objects.create(
+            first_name='author',
+            last_name = 'test'
+        )
+        self.book1 = models.Book.objects.create(
+            title='book 1',
+            author=self.author,
+            num_exist=2
+        )
+        self.book2 = models.Book.objects.create(
+            title = 'book 2',
+            author = self.author,
+            num_exist = 0
+        )
+        self.transaction1 = models.LendingTransaction.objects.create(
+            book=self.book1, borrower=self.user, status='borrowed'
+        )
+        self.transaction2 = models.LendingTransaction.objects.create(
+            book=self.book2, borrower=self.user, status='returned'
+        )
+        self.list_url = reverse('admin-transaction')
+
+
+    def test_admin_access_transaction(self):
+        self.client.login(username='adminuser', password='adminpassword')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(len(response.data), 2)
+
+    def test_user_not_access_transaction(self):
+        self.client.login(username='username', password='userpassword')
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class UserProfileTest(TestCase):
+
+    def setUp(self):
+        self.client=APIClient()
+        self.admin = User.objects.create_superuser(
+            username='admin',
+            password='admin_pass',
+            email='admin@test.com',
+            first_name='Admin',
+            last_name='Test',
+            role='admin'
+        )
+        self.user = User.objects.create_user(
+            username='user',
+            password='user_password',
+            email='user@test.com',
+            first_name='User',
+            last_name='Test',
+            role='borrower'
+        )
+        self.url = reverse('profile')
+    def test_borrower_not_access_profile(self):
+        self.client.login(username='user', password='user_name')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+    def test_borrower_access_profile(self):
+        self.client.login(username='user', password='user_password')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['first_name'], self.user.first_name)
+        self.assertEqual(response.data['last_name'], self.user.last_name)
+        self.assertEqual(response.data['email'], self.user.email)
+
+
+    def test_admin_access_profile(self):
+        self.client.login(username='admin', password='admin_pass')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['first_name'], self.admin.first_name)
+        self.assertEqual(response.data['last_name'], self.admin.last_name)
+        self.assertEqual(response.data['email'], self.admin.email)
+
+
+class BorrowerTransactionTest(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.borrower_user = User.objects.create_user(
+            username='borrower',
+            password='password',
+            first_name='Borrower',
+            last_name='Test',
+            role='borrower'
+        )
+        self.admin = User.objects.create_superuser(
+            username='admin',
+            password='password',
+            first_name='Admin',
+            last_name='Test',
+            role='admin'
+        )
+        self.author = models.Author.objects.create(
+            first_name='Author', last_name='Test'
+        )
+        self.book = models.Book.objects.create(
+            title='book', author=self.author, num_exist= 2
+        )
+        self.transaction1 = models.LendingTransaction.objects.create(
+            book=self.book, borrower=self.borrower_user, status='borrowed', borrowed_at='2023-09-10'
+        )
+        self.transaction2 = models.LendingTransaction.objects.create(
+            book=self.book, borrower=self.borrower_user, status='borrowed', borrowed_at='2023-09-12'
+        )
+        self.transaction_admin = models.LendingTransaction.objects.create(
+            book=self.book, borrower=self.admin, status='borrowed', borrowed_at='2023-09-15'
+        )
+        self.url = reverse('transaction')
+
+    def test_borrower_access_transaction(self):
+        self.client.login(username='borrower', password='password')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(len(response.data), 2)
+
+        serializer = serializers.LendingTransactionUpdate(self.transaction1)
+        self.assertIn(serializer.data, response.data)
+
+    def test_admin_not_access_transaction(self):
+        self.client.login(username='admin', password='password')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(len(response.data), 0)
+
+
+class BorrowerNotificationTest(TestCase):
+    pass

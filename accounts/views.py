@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
-from library.serializers import LendingTransactionUpdate
+from library.serializers import LendingTransactionUpdate, LendingTransactionSerializer
 from library.models import LendingTransaction
 from .models import Users
 from . import serializers
@@ -51,12 +51,12 @@ class AdminsViewSet(ModelViewSet):
     serializer_class = serializers.AdminSerializer
     permission_classes = [IsAdminUser]
 
-class AdminTransaction(ModelViewSet):
+class AdminTransaction(generics.ListAPIView):
     queryset = LendingTransaction.objects.all()
     serializer_class = LendingTransactionUpdate
     permission_classes = [IsAdminUser]
 
-class BorrowerProfile(APIView):
+class UserProfile(APIView):
     permission_classes = [IsAuthenticated]
     @extend_schema(responses=serializers.BorrowerSerializer)
     def get(self, request, *args, **kwargs):

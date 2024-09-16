@@ -111,7 +111,7 @@ class AddCommentView(generics.CreateAPIView):
 
 class AddLendingTransactionView(generics.CreateAPIView):
     queryset = models.LendingTransaction.objects.all()
-    serializer_class = serializers.LendingTransaction
+    serializer_class = serializers.LendingTransactionSerializer
     permission_classes = [IsBorrowerUser]
     def perform_create(self, serializer):
         user = self.request.user
