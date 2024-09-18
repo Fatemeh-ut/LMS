@@ -75,7 +75,7 @@ class BorrowerNotification(generics.ListAPIView):
     serializer_class = LendingTransactionUpdate
     permission_classes = [IsBorrowerUser]
     def get_queryset(self):
-        return LendingTransaction.objects.filter(returned_at__lt = timezone.now(), status = 'borrowed')
+        return LendingTransaction.objects.filter(status = 'borrowed')
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
@@ -91,4 +91,4 @@ class BorrowerNotification(generics.ListAPIView):
             else:
                 item['message'] = "This book has not been returned yet."
 
-            return Response(data)
+        return Response(data)

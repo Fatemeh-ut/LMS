@@ -19,8 +19,6 @@ class UsersPagination(PageNumberPagination):
     page_size = 10
     ordering = ['id']  # Default ordering
 
-
-# just admin access this class
 class AuthorViewSet(ModelViewSet):
     queryset = models.Author.objects.all()
     serializer_class = serializers.AuthorSerializer
@@ -36,7 +34,7 @@ class AuthorViewSet(ModelViewSet):
                 {'error': 'the age must be greeter than 18'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        return super().create(request, *args, **kwargs)
+        return super().update(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         birth_date = request.data.get('birth_date')
@@ -48,7 +46,6 @@ class AuthorViewSet(ModelViewSet):
             )
         return super().create(request, *args, **kwargs)
 
- # admin and borrower access this
 class BookViewSet(ModelViewSet):
     queryset = models.Book.objects.all()
     serializer_class = serializers.BookSerializer
@@ -88,8 +85,6 @@ class BookViewSet(ModelViewSet):
                             )
         return super().create(request, *args, **kwargs)
 
-
-# just admin access this
 class CategoryViewSet(ModelViewSet):
     queryset = models.Category.objects.all()
     serializer_class = serializers.CategorySerializer
@@ -97,8 +92,6 @@ class CategoryViewSet(ModelViewSet):
     filter_backends = [SearchFilter]
     search_fields = ['name']
 
-
-#just borrower access this
 class AddCommentView(generics.CreateAPIView):
     queryset = models.Comment.objects.all()
     serializer_class = serializers.CommentSerializer
@@ -107,7 +100,6 @@ class AddCommentView(generics.CreateAPIView):
     def perform_create(self, serializer):
         book = models.Book.objects.get(pk=self.kwargs['pk'])
         serializer.save(user=self.request.user, book=book)
-
 
 class AddLendingTransactionView(generics.CreateAPIView):
     queryset = models.LendingTransaction.objects.all()
@@ -138,7 +130,7 @@ class AddLendingTransactionView(generics.CreateAPIView):
 class LendingTransactionUpdateView(generics.UpdateAPIView):
     queryset = models.LendingTransaction.objects.all()
     serializer_class = serializers.LendingTransactionUpdate
-
+    permission_classes = [IsBorrowerUser]
     def perform_update(self, serializer):
         instance = serializer.save()
 

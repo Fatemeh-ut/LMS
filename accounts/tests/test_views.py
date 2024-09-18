@@ -1,6 +1,10 @@
+from http.client import responses
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
@@ -44,7 +48,6 @@ class UserRegisterTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(Users.objects.filter(email='no-email').exists())
-
 
 class UserLoginTest(APITestCase):
     def setUp(self):
@@ -94,7 +97,6 @@ class UserLoginTest(APITestCase):
         }
         response = self.client.post(self.url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
 
 class AdminViewTest(TestCase):
     def setUp(self):
@@ -170,7 +172,6 @@ class AdminViewTest(TestCase):
         response = self.client.delete(delete_url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-
 class AdminTransactionTest(TestCase):
 
     def setUp(self):
@@ -220,7 +221,6 @@ class AdminTransactionTest(TestCase):
         response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-
 class UserProfileTest(TestCase):
 
     def setUp(self):
@@ -264,7 +264,6 @@ class UserProfileTest(TestCase):
         self.assertEqual(response.data['first_name'], self.admin.first_name)
         self.assertEqual(response.data['last_name'], self.admin.last_name)
         self.assertEqual(response.data['email'], self.admin.email)
-
 
 class BorrowerTransactionTest(TestCase):
 
@@ -315,8 +314,51 @@ class BorrowerTransactionTest(TestCase):
         self.client.login(username='admin', password='password')
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(len(response.data), 0)
-
+        self.assertEqual(len(response.data), 1)
 
 class BorrowerNotificationTest(TestCase):
-    pass
+
+    def setUp(self):
+        self.client = APIClient()
+        self.borrower = User.objects.create_user(
+            username='borrower_user',
+            password='password123',
+            role='borrower'
+        )
+        self.author = models.Author.objects.create(
+            first_name='Author', last_name='Test'
+        )
+        self.book = models.Book.objects.create(
+            title='book', author=self.author, num_exist=2
+        )
+        self.overdue_transaction = models.LendingTransaction.objects.create(
+            borrower=self.borrower,
+            book=self.book,
+            returned_at =timezone.now() - timedelta(days=1),
+            status='borrowed'
+        )
+
+        self.returned_transaction = models.LendingTransaction.objects.create(
+            borrower=self.borrower,
+            book=self.book,
+            returned_at=timezone.now() + timedelta(days=1),
+            status='borrowed'
+        )
+        self.url = reverse('notification')
+
+    def test_borrower_notification_overdue(self):
+        self.client.login(username='borrower_user', password='password123')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        overdue_message = data[0]['message']
+        self.assertEqual(overdue_message, "This book has not been returned yet.")
+
+    def test_borrower_notification_returned(self):
+        self.client.login(username='borrower_user', password='password123')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        returned_message = data[1]['message']
+        self.assertEqual(returned_message, "This book has been returned.")

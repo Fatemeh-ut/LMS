@@ -4,9 +4,9 @@ from . import views
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
-router.register('authors', views.AuthorViewSet)
-router.register('books', views.BookViewSet)
-router.register('category', views.CategoryViewSet)
+router.register('authors', views.AuthorViewSet, basename='author')
+router.register('books', views.BookViewSet, basename='book')
+router.register('category', views.CategoryViewSet, basename='category')
 router.register('loanPeriod', views.AddLoanPeriodBook, basename='loan-period-book')
 
 urlpatterns =[
