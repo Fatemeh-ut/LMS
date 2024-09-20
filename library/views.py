@@ -16,7 +16,7 @@ from . import filters
 from . import script
 
 class UsersPagination(PageNumberPagination):
-    page_size = 10
+    page_size = 2
     ordering = ['id']  # Default ordering
 
 class AuthorViewSet(ModelViewSet):
@@ -83,14 +83,14 @@ class BookViewSet(ModelViewSet):
             return Response({'error': 'the published date can not be future'},
                             status=status.HTTP_400_BAD_REQUEST
                             )
-        return super().create(request, *args, **kwargs)
+        return super().update(request, *args, **kwargs)
 
 class CategoryViewSet(ModelViewSet):
     queryset = models.Category.objects.all()
     serializer_class = serializers.CategorySerializer
     permission_classes = [IsAdminUser]
     filter_backends = [SearchFilter]
-    search_fields = ['name']
+    search_fields = ['name__iexact']
 
 class AddCommentView(generics.CreateAPIView):
     queryset = models.Comment.objects.all()
@@ -145,7 +145,7 @@ class LendingTransactionUpdateView(generics.UpdateAPIView):
         instance.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class  AddLoanPeriodBook(ModelViewSet):
+class AddLoanPeriodBook(ModelViewSet):
     queryset = models.Book.objects.filter(loan_period=0)
     serializer_class = serializers.SimpleBookSerializer
     permission_classes = [IsAdminUser]

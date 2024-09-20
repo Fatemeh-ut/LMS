@@ -47,7 +47,10 @@ class SimpleAuthorSerializer(ModelSerializer):
 
 class BookSerializer(ModelSerializer):
     comments = CommentSerializer(many=True, read_only=True)
-    author = SimpleAuthorSerializer()
+    author = SlugRelatedField(
+        queryset=models.Author.objects.all(),
+        slug_field='id'
+    )
     category = SlugRelatedField(
         queryset=models.Category.objects.all(),
         slug_field='name'
@@ -55,6 +58,21 @@ class BookSerializer(ModelSerializer):
     class Meta:
         model = models.Book
         fields = ('id', 'title', 'author', 'category', 'published_date', 'isbn','num_exist', 'comments', 'loan_period')
+
+    def update(self, instance, validated_data):
+        instance.title = validated_data.get('title', instance.title)
+        instance.published_date = validated_data.get('published_date', instance.published_date)
+        instance.isbn = validated_data.get('isbn', instance.isbn)
+        instance.num_exist = validated_data.get('num_exist', instance.num_exist)
+        instance.loan_period = validated_data.get('loan_period', instance.loan_period)
+
+        category_data = validated_data.get('category')
+        if category_data:
+            instance.category = category_data
+
+        instance.save()
+        return instance
+
 
 class LendingTransactionSerializer(ModelSerializer):
     class Meta:
