@@ -3,6 +3,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework import status
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
@@ -105,6 +106,7 @@ class AddLendingTransactionView(generics.CreateAPIView):
     queryset = models.LendingTransaction.objects.all()
     serializer_class = serializers.LendingTransactionSerializer
     permission_classes = [IsBorrowerUser]
+
     def perform_create(self, serializer):
         user = self.request.user
         profile = Users.objects.get(id=user.id)
@@ -113,19 +115,23 @@ class AddLendingTransactionView(generics.CreateAPIView):
         current_borrowed_books = models.LendingTransaction.objects.filter(borrower=user, returned_at__isnull=True).count()
 
         if current_borrowed_books >= max_borrowed_book:
-            return Response({'error':'You have reached the limit of borrowed books'},
-                            status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError({'error': 'You have reached the limit of borrowed books'})
 
         book = models.Book.objects.get(pk=self.kwargs['pk'])
+        print("Available Copies:", book.num_exist)  # دیباگ
+
+        if book.num_exist <= 0:
+            raise ValidationError({'error': 'Book is not available'})
+
         book.num_exist -= 1
+        book.save()
 
         borrowed_at = timezone.now()
-
         loan_period_days = book.loan_period
         returned_at = borrowed_at + timedelta(days=loan_period_days)
 
-        book.save()
-        serializer.save(borrower=self.request.user,borrowed_at=borrowed_at,returned_at=returned_at,book=book)
+        serializer.save(borrower=user, borrowed_at=borrowed_at, returned_at=returned_at, book=book)
+
 
 class LendingTransactionUpdateView(generics.UpdateAPIView):
     queryset = models.LendingTransaction.objects.all()
@@ -140,7 +146,8 @@ class LendingTransactionUpdateView(generics.UpdateAPIView):
             user.save()
             instance.returned_at = timezone.now()
             instance.save()
-            return Response({'error': 'the return date has been passed, your account is now inactive '}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError({'error': 'the return date has been passed, your account is now inactive '})
+           # return Response({'error': 'the return date has been passed, your account is now inactive '}, status=status.HTTP_400_BAD_REQUEST)
         instance.status = 'returned'
         instance.save()
         return Response(serializer.data, status=status.HTTP_200_OK)

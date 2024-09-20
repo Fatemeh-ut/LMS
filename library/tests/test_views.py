@@ -1,6 +1,6 @@
 from django.test import TestCase
-from datetime import date
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.contrib.auth import get_user_model
@@ -285,21 +285,146 @@ class AddCommentTest(TestCase):
         response = self.client.post(self.url, self.comment, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-class AddTransactionTest(TestCase):
+class AddTransactionTest(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-
+            username='user',
+            password='user123',
+            role='borrower',
+            max_borrowed_book=2
         )
-    def test_borrower_access(self):
-        pass
-    def test_borrower_add_transaction(self):
-        pass
 
- #
+        self.author = models.Author.objects.create(
+            first_name='author',
+            last_name='test'
+        )
+        self.book = models.Book.objects.create(
+            title='book',
+            author=self.author,
+            num_exist=7,
+            loan_period=7
+        )
+
+    def test_add_lending_transaction_success(self):
+        self.client.login(username='user', password='user123')
+        response = self.client.post(reverse('add-lending-transaction', kwargs={'pk':self.book.pk}))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(models.LendingTransaction.objects.count(), 1)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.num_exist, 6)
+
+    def test_add_lending_transaction_limit_reached(self):
+        self.client.login(username='user', password='user123')
+        models.LendingTransaction.objects.create(borrower=self.user, book=self.book, borrowed_at=timezone.now())
+        models.LendingTransaction.objects.create(borrower=self.user, book=self.book, borrowed_at=timezone.now())
+        response = self.client.post(reverse('add-lending-transaction', kwargs={'pk': self.book.pk}))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'You have reached the limit of borrowed books')
+
+    def test_add_lending_transaction_book_not_available(self):
+        self.book.num_exist = 0
+        self.book.save()
+        self.client.login(username='user', password='user123')
+        response = self.client.post(reverse('add-lending-transaction', kwargs={'pk': self.book.pk}))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'Book is not available')
+
 class AddTransactionUpdate(TestCase):
-    pass
-  #
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='user',
+            password='user123',
+            role='borrower'
+        )
+        self.admin = User.objects.create_superuser(
+            username='admin',
+            password='admin123',
+            role='admin'
+        )
+        self.author = models.Author.objects.create(
+            first_name='author',
+            last_name='test'
+        )
+        self.book = models.Book.objects.create(
+            title='book',
+            author=self.author,
+            num_exist=10,
+            loan_period=10
+        )
+        self.transaction = models.LendingTransaction.objects.create(
+            book=self.book,
+            borrower=self.user,
+            status='borrowed',
+            borrowed_at=timezone.now() - timezone.timedelta(days=15),
+            returned_at=timezone.now() - timezone.timedelta(days=5)
+        )
+    def test_admin_not_access(self):
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get(reverse('lending-transaction-update', kwargs={'pk':self.transaction.pk}))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+    def test_update_lending_transaction_return_date_passed(self):
+        self.client.login(username='user', password='user123')
+        url = reverse('lending-transaction-update', kwargs={'pk':self.transaction.pk})
+        data = {'status':'borrowed'}
+        response = self.client.patch(url, data, content_type='application/json')
+        self.user.refresh_from_db()
+        self.transaction.refresh_from_db()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('the return date has been passed', response.data['error'])
+        self.assertFalse(self.user.is_active)
+        self.assertEqual(self.transaction.returned_at.date(), timezone.now().date())
+
+    def test_update_lending_transaction_status_returned(self):
+        self.client.login(username='user', password='user123')
+
+        url = reverse('lending-transaction-update', kwargs={'pk': self.transaction.pk})
+        data = {'status': 'returned'}
+
+        response = self.client.patch(url, data, content_type='application/json')
+        self.transaction.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.transaction.status, 'returned')
+
 class AddLoanPeriodTest(TestCase):
-    pass    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='user',
+            password='user123',
+            role='borrower'
+        )
+        self.admin = User.objects.create_superuser(
+            username='admin',
+            password='admin123',
+            role='admin'
+        )
+        self.author = models.Author.objects.create(
+            first_name='author',
+            last_name='test'
+        )
+        self.book1 = models.Book.objects.create(
+            title='book1',
+            author=self.author,
+            num_exist=2,
+            loan_period=10
+        )
+        self.book2 = models.Book.objects.create(
+            title='book2',
+            author=self.author,
+            num_exist=2,
+            loan_period=0
+        )
 
+    def test_admin_access_book_zero_loan_period(self):
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get(reverse('loan-period-book-list'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']),1)
+        self.assertEqual(response.data['results'][0]['title'], 'book2')
 
+    def test_user_not_access(self):
+        self.client.login(username='user', password='user123')
+        response = self.client.get(reverse('loan-period-book-list'))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
